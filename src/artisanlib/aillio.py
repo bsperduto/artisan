@@ -21,33 +21,35 @@ from struct import unpack
 from multiprocessing import Pipe
 import threading
 from platform import system
-import usb.core # type: ignore
-import usb.util # type: ignore
-
+import usb.core  # type: ignore
+import usb.util  # type: ignore
+import libusb_package
 import array
 
-#import requests
-#from requests_file import FileAdapter # type: ignore # @UnresolvedImport
-#import json
-#from lxml import html # unused
+# import requests
+# from requests_file import FileAdapter # type: ignore # @UnresolvedImport
+# import json
+# from lxml import html # unused
 
 import logging
 from typing import Final, Optional, List, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     try:
-        from multiprocessing.connection import PipeConnection as Connection # type: ignore[unused-ignore,attr-defined,assignment] # pylint: disable=unused-import
+        from multiprocessing.connection import \
+            PipeConnection as Connection  # type: ignore[unused-ignore,attr-defined,assignment] # pylint: disable=unused-import
     except ImportError:
-        from multiprocessing.connection import Connection # type: ignore[unused-ignore,attr-defined,assignment] # pylint: disable=unused-import
+        from multiprocessing.connection import \
+            Connection  # type: ignore[unused-ignore,attr-defined,assignment] # pylint: disable=unused-import
 #    from artisanlib.types import ProfileData # pylint: disable=unused-import
 #    from artisanlib.main import ApplicationWindow # pylint: disable=unused-import
 
-#try:
+# try:
 #    from PyQt6.QtCore import QDateTime, Qt # @UnusedImport @Reimport  @UnresolvedImport
-#except ImportError:
+# except ImportError:
 #    from PyQt5.QtCore import QDateTime, Qt # type: ignore # @UnusedImport @Reimport  @UnresolvedImport
 
-#from artisanlib.util import encodeLocal
+# from artisanlib.util import encodeLocal
 
 
 _log: Final[logging.Logger] = logging.getLogger(__name__)
@@ -78,33 +80,33 @@ class AillioR1:
     AILLIO_STATE_COOLING = 0x08
     AILLIO_STATE_SHUTDOWN = 0x09
 
-    def __init__(self, debug:bool = False) -> None:
+    def __init__(self, debug: bool = False) -> None:
         self.simulated = False
         self.AILLIO_DEBUG = debug
         self.__dbg('init')
-        self.usbhandle:Optional[usb.core.Device] = None # type:ignore[no-any-unimported,unused-ignore]
-        self.bt:float = 0
-        self.dt:float = 0
-        self.heater:float = 0
-        self.fan:float = 0
-        self.bt_ror:float = 0
-        self.drum:float = 0
-        self.voltage:float = 0
-        self.exitt:float = 0
-        self.state_str:str = ''
-        self.r1state:int = 0
-        self.worker_thread:Optional[threading.Thread] = None
+        self.usbhandle: Optional[usb.core.Device] = None  # type:ignore[no-any-unimported,unused-ignore]
+        self.bt: float = 0
+        self.dt: float = 0
+        self.heater: float = 0
+        self.fan: float = 0
+        self.bt_ror: float = 0
+        self.drum: float = 0
+        self.voltage: float = 0
+        self.exitt: float = 0
+        self.state_str: str = ''
+        self.r1state: int = 0
+        self.worker_thread: Optional[threading.Thread] = None
         self.worker_thread_run = True
-        self.roast_number:int = -1
-        self.fan_rpm:float = 0
+        self.roast_number: int = -1
+        self.fan_rpm: float = 0
 
-        self.parent_pipe:Optional['Connection'] = None # type:ignore[no-any-unimported,unused-ignore]
-        self.child_pipe:Optional['Connection'] = None # type:ignore[no-any-unimported,unused-ignore]
-        self.irt:float = 0
-        self.pcbt:float = 0
-        self.coil_fan:int = 0
-        self.coil_fan2:int = 0
-        self.pht:int = 0
+        self.parent_pipe: Optional['Connection'] = None  # type:ignore[no-any-unimported,unused-ignore]
+        self.child_pipe: Optional['Connection'] = None  # type:ignore[no-any-unimported,unused-ignore]
+        self.irt: float = 0
+        self.pcbt: float = 0
+        self.coil_fan: int = 0
+        self.coil_fan2: int = 0
+        self.pht: int = 0
         self.minutes = 0
         self.seconds = 0
 
@@ -112,7 +114,7 @@ class AillioR1:
         if not self.simulated:
             self.__close()
 
-    def __dbg(self, msg:str) -> None:
+    def __dbg(self, msg: str) -> None:
         if self.AILLIO_DEBUG and not self.simulated:
             try:
                 print('AillioR1: ' + msg)
@@ -124,22 +126,22 @@ class AillioR1:
             return
         if self.usbhandle is not None:
             return
-        self.usbhandle = usb.core.find(idVendor=self.AILLIO_VID,
-                                       idProduct=self.AILLIO_PID)
+        self.usbhandle = libusb_package.find(idVendor=self.AILLIO_VID,
+                                             idProduct=self.AILLIO_PID)
         if self.usbhandle is None:
-            self.usbhandle = usb.core.find(idVendor=self.AILLIO_VID,
-                                           idProduct=self.AILLIO_PID_REV3)
+            self.usbhandle = libusb_package.find(idVendor=self.AILLIO_VID,
+                                                 idProduct=self.AILLIO_PID_REV3)
         if self.usbhandle is None:
             raise OSError('not found or no permission')
         self.__dbg('device found!')
         if not system().startswith('Windows') and self.usbhandle.is_kernel_driver_active(self.AILLIO_INTERFACE):
             try:
                 self.usbhandle.detach_kernel_driver(self.AILLIO_INTERFACE)
-            except Exception: # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except
                 pass
                 # detach fails on libusb 1.0.26 and newer on macOS >v12 if not running under sudo and seems not to be needed on those configurations
-#                self.usbhandle = None
-#                raise OSError('unable to detach kernel driver') from e
+        #                self.usbhandle = None
+        #                raise OSError('unable to detach kernel driver') from e
         try:
             config = self.usbhandle.get_active_configuration()
             if config.bConfigurationValue != self.AILLIO_CONFIGURATION:
@@ -177,7 +179,7 @@ class AillioR1:
                 usb.util.release_interface(self.usbhandle,
                                            self.AILLIO_INTERFACE)
                 usb.util.dispose_resources(self.usbhandle)
-            except Exception: # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except
                 pass
             self.usbhandle = None
 
@@ -241,7 +243,7 @@ class AillioR1:
         self.__getstate()
         return self.r1state
 
-    def set_heater(self, value:float) -> None:
+    def set_heater(self, value: float) -> None:
         self.__dbg('set_heater ' + str(value))
         value = int(value)
         if value < 0:
@@ -252,7 +254,7 @@ class AillioR1:
         d = abs(h - value)
         if d <= 0:
             return
-        d = int(float(min(d,9)))
+        d = int(float(min(d, 9)))
         if h > value:
             if self.parent_pipe is not None:
                 for _ in range(d):
@@ -262,7 +264,7 @@ class AillioR1:
                 self.parent_pipe.send(self.AILLIO_CMD_HEATER_INCR)
         self.heater = value
 
-    def set_fan(self, value:float) -> None:
+    def set_fan(self, value: float) -> None:
         self.__dbg('set_fan ' + str(value))
         value = int(value)
         if value < 1:
@@ -273,7 +275,7 @@ class AillioR1:
         d = abs(f - value)
         if d <= 0:
             return
-        d = int(round(min(d,11)))
+        d = int(round(min(d, 11)))
         if f > value:
             if self.parent_pipe is not None:
                 for _ in range(d):
@@ -283,7 +285,7 @@ class AillioR1:
                 self.parent_pipe.send(self.AILLIO_CMD_FAN_INCR)
         self.fan = value
 
-    def set_drum(self, value:float) -> None:
+    def set_drum(self, value: float) -> None:
         self.__dbg('set_drum ' + str(value))
         value = int(value)
         if value < 1:
@@ -299,17 +301,17 @@ class AillioR1:
         if self.parent_pipe is not None:
             self.parent_pipe.send(self.AILLIO_CMD_PRS)
 
-    def __updatestate(self, p:'Connection') -> None: # type:ignore[no-any-unimported,unused-ignore]
+    def __updatestate(self, p: 'Connection') -> None:  # type:ignore[no-any-unimported,unused-ignore]
         while self.worker_thread_run:
-            state1:'array.array[int]' = array.array('B', bytes(0))
-            state2:'array.array[int]' = array.array('B', bytes(0))
+            state1: 'array.array[int]' = array.array('B', bytes(0))
+            state2: 'array.array[int]' = array.array('B', bytes(0))
             try:
                 self.__dbg('updatestate')
                 self.__sendcmd(self.AILLIO_CMD_STATUS1)
                 state1 = self.__readreply(64)
                 self.__sendcmd(self.AILLIO_CMD_STATUS2)
                 state2 = self.__readreply(64)
-            except Exception: # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except
                 pass
             if p.poll():
                 cmd = p.recv()
@@ -396,17 +398,18 @@ class AillioR1:
         self.__dbg('state: ' + self.state_str)
         self.__dbg('second coil fan: ' + str(self.coil_fan2))
 
-    def __sendcmd(self, cmd:List[int]) -> None:
+    def __sendcmd(self, cmd: List[int]) -> None:
         self.__dbg('sending command: ' + str(cmd))
         if self.usbhandle is not None:
             self.usbhandle.write(self.AILLIO_ENDPOINT_WR, cmd)
 
-    def __readreply(self, length:int) -> Any:
+    def __readreply(self, length: int) -> Any:
         if self.usbhandle is not None:
             return self.usbhandle.read(self.AILLIO_ENDPOINT_RD, length)
         raise OSError('not found or no permission')
 
-#def extractProfileBulletDict(data:Dict, aw:'ApplicationWindow') -> 'ProfileData':
+
+# def extractProfileBulletDict(data:Dict, aw:'ApplicationWindow') -> 'ProfileData':
 #    try:
 #        res:'ProfileData' = {} # the interpreted data set
 #
@@ -627,7 +630,7 @@ class AillioR1:
 #        _log.exception(e)
 #        return {}
 
-#def extractProfileRoastWorld(url:'QUrl', aw:'ApplicationWindow') -> Optional['ProfileData']:
+# def extractProfileRoastWorld(url:'QUrl', aw:'ApplicationWindow') -> Optional['ProfileData']:
 #    s = requests.Session()
 #    s.mount('file://', FileAdapter())
 #    page = s.get(url.toString(), timeout=(4, 15), headers={'Accept-Encoding' : 'gzip'})
@@ -645,7 +648,7 @@ class AillioR1:
 #            pass
 #    return res
 
-#def extractProfileRoasTime(file, aw:'ApplicationWindow') -> 'ProfileData':
+# def extractProfileRoasTime(file, aw:'ApplicationWindow') -> 'ProfileData':
 #    with open(file, encoding='utf-8') as infile:
 #        data = json.load(infile)
 #    return extractProfileBulletDict(data, aw)
